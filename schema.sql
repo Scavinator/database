@@ -18,6 +18,15 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: integration_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.integration_type AS ENUM (
+    'discord'
+);
+
+
+--
 -- Name: item_status; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -29,6 +38,19 @@ CREATE TYPE public.item_status AS ENUM (
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: item_integrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.item_integrations (
+    item_id bigint NOT NULL,
+    integration_data jsonb,
+    type public.integration_type NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
 
 --
 -- Name: item_tags; Type: TABLE; Schema: public; Owner: -
@@ -105,11 +127,9 @@ CREATE TABLE public.items (
     number integer,
     page_number integer,
     content text,
-    discord_thread_id text,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
     list_category_id bigint,
-    discord_message_id text,
     status public.item_status,
     CONSTRAINT list_category_or_page_number CHECK ((NOT ((page_number IS NULL) AND (list_category_id IS NULL))))
 );
@@ -201,6 +221,19 @@ ALTER SEQUENCE public.page_captains_id_seq OWNED BY public.page_captains.id;
 
 
 --
+-- Name: page_integrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.page_integrations (
+    page_id bigint NOT NULL,
+    integration_data jsonb,
+    type public.integration_type NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
 -- Name: pages; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -208,8 +241,6 @@ CREATE TABLE public.pages (
     id bigint NOT NULL,
     team_scav_hunt_id bigint NOT NULL,
     page_number integer,
-    discord_thread_id text,
-    discord_message_id text,
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
@@ -698,6 +729,14 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
+-- Name: item_integrations item_integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.item_integrations
+    ADD CONSTRAINT item_integrations_pkey PRIMARY KEY (type, item_id);
+
+
+--
 -- Name: item_tags item_tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -727,14 +766,6 @@ ALTER TABLE ONLY public.item_users
 
 ALTER TABLE ONLY public.item_users
     ADD CONSTRAINT item_users_unique UNIQUE (user_id, item_id);
-
-
---
--- Name: items items_discord_thread_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.items
-    ADD CONSTRAINT items_discord_thread_id_key UNIQUE (discord_thread_id);
 
 
 --
@@ -770,19 +801,11 @@ ALTER TABLE ONLY public.page_captains
 
 
 --
--- Name: pages pages_discord_message_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: page_integrations page_integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.pages
-    ADD CONSTRAINT pages_discord_message_id_key UNIQUE (discord_message_id);
-
-
---
--- Name: pages pages_discord_thread_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.pages
-    ADD CONSTRAINT pages_discord_thread_id_key UNIQUE (discord_thread_id);
+ALTER TABLE ONLY public.page_integrations
+    ADD CONSTRAINT page_integrations_pkey PRIMARY KEY (type, page_id);
 
 
 --
@@ -978,10 +1001,46 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: item_integrations_discord_message_id_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX item_integrations_discord_message_id_unique ON public.item_integrations USING btree (((integration_data ->> 'message_id'::text))) WHERE (type = 'discord'::public.integration_type);
+
+
+--
+-- Name: item_integrations_discord_thread_id_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX item_integrations_discord_thread_id_unique ON public.item_integrations USING btree (((integration_data ->> 'thread_id'::text))) WHERE (type = 'discord'::public.integration_type);
+
+
+--
+-- Name: page_integrations_discord_message_id_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX page_integrations_discord_message_id_unique ON public.page_integrations USING btree (((integration_data ->> 'message_id'::text))) WHERE (type = 'discord'::public.integration_type);
+
+
+--
+-- Name: page_integrations_discord_thread_id_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX page_integrations_discord_thread_id_unique ON public.page_integrations USING btree (((integration_data ->> 'thread_id'::text))) WHERE (type = 'discord'::public.integration_type);
+
+
+--
 -- Name: team_scav_hunt_list_category_item_number_unique; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX team_scav_hunt_list_category_item_number_unique ON public.items USING btree (team_scav_hunt_id, COALESCE(list_category_id, ('-1'::integer)::bigint), number);
+
+
+--
+-- Name: item_integrations item_integrations_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.item_integrations
+    ADD CONSTRAINT item_integrations_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id);
 
 
 --
@@ -1054,6 +1113,14 @@ ALTER TABLE ONLY public.page_captains
 
 ALTER TABLE ONLY public.page_captains
     ADD CONSTRAINT page_captains_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: page_integrations page_integrations_page_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.page_integrations
+    ADD CONSTRAINT page_integrations_page_id_fkey FOREIGN KEY (page_id) REFERENCES public.pages(id);
 
 
 --
